@@ -4,6 +4,8 @@ import morgan from 'morgan';
 import cors from 'cors';
 import { init as initFirebase } from './services/firebaseAdmin';
 import authRoutes from './routes/auth';
+import authMiddleware from './middleware/authMiddleware';
+import { getProfile, updateProfile } from './controllers/authController';
 
 const app = express();
 
@@ -15,6 +17,10 @@ app.use(express.json());
 initFirebase();
 
 app.use('/api/auth', authRoutes);
+
+// Rutas adicionales para compatibilidad con el frontend
+app.get('/api/user/profile', authMiddleware, getProfile);
+app.post('/api/user/update', authMiddleware, updateProfile);
 
 app.get('/', (req: Request, res: Response) => res.json({ ok: true, message: 'Interactify API (TypeScript) running' }));
 
