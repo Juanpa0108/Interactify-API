@@ -1,11 +1,30 @@
+/**
+ * Interactify API entry point
+ *
+ * Responsibilities:
+ * - Load environment variables and start the Express server.
+ * - Initialize `firebase-admin` via `services/firebaseAdmin`.
+ * - Mount auth routes and protected routes used by the frontend.
+ *
+ * Environment variables:
+ * - PORT (optional) — port to listen on (default: 5000)
+ * - FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_BASE64 — required to access Firestore/Auth
+ *
+ * Example run (PowerShell):
+ *  $env:FIREBASE_SERVICE_ACCOUNT_PATH = 'C:\\\\keys\\sa.json'
+ *  $env:PORT = '5000'
+ *  npm run dev
+ */
 import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
-import morgan from 'morgan';
-import cors from 'cors';
+// Use CommonJS-style import assignment so the runtime value is the callable function
+import morgan = require('morgan');
+import cors = require('cors');
 import { init as initFirebase } from './services/firebaseAdmin';
 import authRoutes from './routes/auth';
 import authMiddleware from './middleware/authMiddleware';
 import { getProfile, updateProfile } from './controllers/authController';
+import protectedRoutes from './routes/protected';
 
 const app = express();
 
@@ -17,6 +36,9 @@ app.use(express.json());
 initFirebase();
 
 app.use('/api/auth', authRoutes);
+
+// Protected test routes
+app.use('/api/protected', protectedRoutes);
 
 // Rutas adicionales para compatibilidad con el frontend
 app.get('/api/user/profile', authMiddleware, getProfile);

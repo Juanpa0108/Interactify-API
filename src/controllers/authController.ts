@@ -1,5 +1,36 @@
+/**
+ * Auth controller
+ *
+ * Exposes handlers for authentication-related routes used by the frontend.
+ * Important notes:
+ * - Authentication (passwords, social sign-in) is handled by Firebase Auth on the client.
+ * - The server verifies the Firebase ID token (sent by the client) using `firebase-admin`.
+ * - The server creates/ensures a Firestore `users` profile document for application data.
+ *
+ * Endpoints and expected payloads (overview):
+ * - POST /api/auth/signup
+ *     body: { firstName, lastName, email, password }
+ *     Creates a Firebase Auth user (server-side) and a Firestore profile.
+ * - POST /api/auth/login
+ *     body: { idToken }
+ *     Verifies the ID token and returns merged Auth + Firestore profile.
+ * - POST /api/auth/login/google
+ * - POST /api/auth/login/github
+ *     body: { idToken }
+ *     Social sign-ins: client obtains ID token via Firebase client SDK and sends it here.
+ * - GET /api/user/profile (protected)
+ *     Header: Authorization: Bearer <idToken>
+ *     Returns user profile data.
+ * - PUT /api/user/update (protected)
+ *     Header: Authorization: Bearer <idToken>
+ *     body: { firstName, lastName }
+ *
+ * Error handling:
+ * - Returns 400 for missing or invalid payloads, 401 for token issues, 409 for email conflict.
+ */
 import { Request, Response, NextFunction } from 'express';
 import firebaseAdmin from '../services/firebaseAdmin';
+import userModel from '../models/User';
 
 // Validación de email
 const validateEmail = (email: string): boolean => {
@@ -41,16 +72,13 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
       password,
       displayName,
     });
-
-    // Guardar información adicional en Firestore (preparado para cuando se configure)
-    // TODO: Guardar firstName, lastName, email en Firestore cuando esté configurado
-    // const db = admin.firestore();
-    // await db.collection('users').doc(userRecord.uid).set({
-    //   firstName,
-    //   lastName,
-    //   email,
-    //   createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    // });
+    // Guardar información adicional en Firestore usando el modelo `userModel`
+    try {
+      await userModel.createUserProfile(userRecord.uid, { firstName, lastName, email });
+    } catch (e) {
+      // Non-fatal: log and continue — user was created in Auth but Firestore write failed
+      console.warn('[signup] Failed to create Firestore profile:', (e as any)?.message || e);
+    }
 
     res.status(201).json({
       message: 'Usuario registrado exitosamente',
@@ -95,6 +123,21 @@ export async function login(req: Request, res: Response, next: NextFunction) {
     // Obtener información del usuario
     const userRecord = await admin.auth().getUser(decodedToken.uid);
 
+    // Ensure Firestore profile exists (create if missing)
+    try {
+      const existing = await userModel.getUserProfile(userRecord.uid);
+      if (!existing) {
+        const nameParts = (userRecord.displayName || '').split(' ');
+        await userModel.createUserProfile(userRecord.uid, {
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: userRecord.email || undefined,
+        });
+      }
+    } catch (e) {
+      console.warn('[login] could not ensure Firestore profile', (e as any)?.message || e);
+    }
+
     res.json({
       message: 'Login exitoso',
       user: {
@@ -137,8 +180,20 @@ export async function loginWithGoogle(req: Request, res: Response, next: NextFun
     // Obtener información del usuario
     const userRecord = await admin.auth().getUser(decodedToken.uid);
 
-    // Si el usuario no existe en Firestore, crearlo (preparado para cuando se configure)
-    // TODO: Verificar/crear usuario en Firestore cuando esté configurado
+    // Ensure Firestore profile exists (create if missing)
+    try {
+      const existing = await userModel.getUserProfile(userRecord.uid);
+      if (!existing) {
+        const nameParts = (userRecord.displayName || '').split(' ');
+        await userModel.createUserProfile(userRecord.uid, {
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: userRecord.email || undefined,
+        });
+      }
+    } catch (e) {
+      console.warn('[loginWithGoogle] could not create Firestore profile', (e as any)?.message || e);
+    }
 
     res.json({
       message: 'Login con Google exitoso',
@@ -180,8 +235,20 @@ export async function loginWithGitHub(req: Request, res: Response, next: NextFun
     // Obtener información del usuario
     const userRecord = await admin.auth().getUser(decodedToken.uid);
 
-    // Si el usuario no existe en Firestore, crearlo (preparado para cuando se configure)
-    // TODO: Verificar/crear usuario en Firestore cuando esté configurado
+    // Ensure Firestore profile exists (create if missing)
+    try {
+      const existing = await userModel.getUserProfile(userRecord.uid);
+      if (!existing) {
+        const nameParts = (userRecord.displayName || '').split(' ');
+        await userModel.createUserProfile(userRecord.uid, {
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: userRecord.email || undefined,
+        });
+      }
+    } catch (e) {
+      console.warn('[loginWithGitHub] could not create Firestore profile', (e as any)?.message || e);
+    }
 
     res.json({
       message: 'Login con GitHub exitoso',
@@ -249,19 +316,17 @@ export async function getProfile(req: Request, res: Response, next: NextFunction
     // Obtener información completa del usuario
     const userRecord = await admin.auth().getUser(user.uid);
 
-    // TODO: Obtener información adicional de Firestore cuando esté configurado
-    // const db = admin.firestore();
-    // const userDoc = await db.collection('users').doc(user.uid).get();
-    // const userData = userDoc.data();
-
-    // Por ahora, extraer firstName y lastName del displayName si existe
-    let firstName = '';
-    let lastName = '';
-    if (userRecord.displayName) {
-      const nameParts = userRecord.displayName.split(' ');
-      firstName = nameParts[0] || '';
-      lastName = nameParts.slice(1).join(' ') || '';
+    // Obtener información adicional de Firestore si existe
+    let userData = null
+    try {
+      userData = await userModel.getUserProfile(user.uid)
+    } catch (e) {
+      console.warn('[getProfile] could not read Firestore profile', (e as any)?.message || e)
     }
+
+    // Merge Auth and Firestore profile fields
+    const firstName = userData?.firstName || (userRecord.displayName ? userRecord.displayName.split(' ')[0] : '')
+    const lastName = userData?.lastName || (userRecord.displayName ? userRecord.displayName.split(' ').slice(1).join(' ') : '')
 
     res.json({
       firstName,
@@ -270,6 +335,7 @@ export async function getProfile(req: Request, res: Response, next: NextFunction
       displayName: userRecord.displayName,
       photoURL: userRecord.photoURL,
       uid: userRecord.uid,
+      profile: userData,
     });
   } catch (err) {
     next(err);
@@ -303,13 +369,12 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
       displayName,
     });
 
-    // TODO: Actualizar en Firestore cuando esté configurado
-    // const db = admin.firestore();
-    // await db.collection('users').doc(user.uid).update({
-    //   firstName,
-    //   lastName,
-    //   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    // });
+    // Actualizar en Firestore si está configurado
+    try {
+      await userModel.updateUserProfile(user.uid, { firstName, lastName })
+    } catch (e) {
+      console.warn('[updateProfile] could not update Firestore profile', (e as any)?.message || e)
+    }
 
     // Obtener usuario actualizado
     const userRecord = await admin.auth().getUser(user.uid);
