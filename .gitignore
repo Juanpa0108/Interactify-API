@@ -1,6 +1,8 @@
 node_modules/
 dist/
 .env
+# Firebase credentials
 serviceAccountKey.json
+credentials/
 .DS_Store
 coverage/
