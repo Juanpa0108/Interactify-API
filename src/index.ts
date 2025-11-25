@@ -22,6 +22,7 @@ import morgan = require('morgan');
 import cors = require('cors');
 import { init as initFirebase } from './services/firebaseAdmin';
 import authRoutes from './routes/auth';
+import meetingsRoutes from './routes/meetings';
 import authMiddleware from './middleware/authMiddleware';
 import { getProfile, updateProfile } from './controllers/authController';
 import protectedRoutes from './routes/protected';
@@ -43,6 +44,9 @@ app.use((req, res, next) => {
 initFirebase();
 
 app.use('/api/auth', authRoutes);
+
+// Meetings
+app.use('/api/meetings', meetingsRoutes);
 
 // Protected test routes
 app.use('/api/protected', protectedRoutes);
