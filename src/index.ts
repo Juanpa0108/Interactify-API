@@ -32,6 +32,13 @@ app.use(morgan('dev'));
 app.use(cors());
 app.use(express.json());
 
+// Allow popups (Firebase auth signInWithPopup) to communicate with the opener.
+// Without this, some browsers' COOP policy blocks window.close/window.closed
+// calls coming from the popup and the auth flow can fail.
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  next();
+});
 // Inicializar Firebase Admin
 initFirebase();
 
