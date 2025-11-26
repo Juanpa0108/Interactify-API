@@ -50,9 +50,37 @@ const validatePassword = (password: string): boolean => {
 export async function signup(req: Request, res: Response, next: NextFunction) {
   try {
     const admin = firebaseAdmin.init();
-    const { firstName, lastName, email, password } = req.body;
 
-    // Validaciones
+    // Two modes supported for signup:
+    // 1) Client-side creates the Firebase Auth user (recommended): client sends { idToken, firstName, lastName }
+    //    Server verifies idToken and creates/ensures the Firestore profile for the uid.
+    // 2) Server-side creation: client sends { firstName, lastName, email, password } and server creates the Auth user.
+    const { idToken, firstName, lastName, email, password } = req.body;
+
+    if (idToken) {
+      // Mode 1: verify token and create/ensure profile
+      const decoded = await admin.auth().verifyIdToken(idToken);
+      const uid = decoded.uid;
+
+      // Basic validation for names
+      if (!firstName || !lastName) {
+        return res.status(400).json({ error: 'firstName and lastName are required when using idToken' });
+      }
+
+      try {
+        await userModel.createUserProfile(uid, { firstName, lastName, email: decoded.email || email });
+      } catch (e) {
+        console.warn('[signup] Failed to create Firestore profile:', (e as any)?.message || e);
+      }
+
+      return res.status(201).json({
+        message: 'Usuario registrado exitosamente (client-side auth)',
+        user: { uid, email: decoded.email, displayName: decoded.name, firstName, lastName },
+        token: idToken,
+      });
+    }
+
+    // Mode 2: server-side create
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).json({ error: 'Todos los campos son requeridos: firstName, lastName, email, password' });
     }
@@ -65,18 +93,17 @@ export async function signup(req: Request, res: Response, next: NextFunction) {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
     }
 
-    // Crear usuario en Firebase Auth
+    // Crear usuario en Firebase Auth (server-side)
     const displayName = `${firstName} ${lastName}`;
     const userRecord = await admin.auth().createUser({
       email,
       password,
       displayName,
     });
-    // Guardar información adicional en Firestore usando el modelo `userModel`
+
     try {
       await userModel.createUserProfile(userRecord.uid, { firstName, lastName, email });
     } catch (e) {
-      // Non-fatal: log and continue — user was created in Auth but Firestore write failed
       console.warn('[signup] Failed to create Firestore profile:', (e as any)?.message || e);
     }
 
