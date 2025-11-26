@@ -3,6 +3,5 @@ dist/
 .env
 # Firebase credentials
 serviceAccountKey.json
-credentials/
 .DS_Store
 coverage/
