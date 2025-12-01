@@ -420,3 +420,33 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
     next(err);
   }
 }
+
+/**
+ * Eliminar cuenta del usuario autenticado
+ * - Borra el documento de perfil en Firestore (si existe)
+ * - Borra el usuario de Firebase Auth mediante admin SDK
+ */
+export async function deleteAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const admin = firebaseAdmin.init();
+    const user = (req as any).user; // Viene del middleware
+
+    if (!user || !user.uid) {
+      return res.status(401).json({ error: 'Usuario no autenticado' });
+    }
+
+    // Intentar eliminar el perfil en Firestore, pero no abortar si falla
+    try {
+      await userModel.deleteUserProfile(user.uid);
+    } catch (e) {
+      console.warn('[deleteAccount] could not delete Firestore profile', (e as any)?.message || e);
+    }
+
+    // Eliminar el usuario en Firebase Auth
+    await admin.auth().deleteUser(user.uid);
+
+    res.json({ message: 'Cuenta eliminada exitosamente' });
+  } catch (err) {
+    next(err);
+  }
+}

@@ -36,4 +36,10 @@ export async function updateUserProfile(uid: string, patch: Partial<UserProfile>
   return getUserProfile(uid)
 }
 
-export default { createUserProfile, getUserProfile, updateUserProfile }
+export async function deleteUserProfile(uid: string) {
+  const db = getDb()
+  await db.collection(collectionName).doc(uid).delete()
+  return true
+}
+
+export default { createUserProfile, getUserProfile, updateUserProfile, deleteUserProfile }
