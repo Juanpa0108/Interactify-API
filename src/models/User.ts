@@ -2,10 +2,10 @@ import firebaseAdmin from '../services/firebaseAdmin'
 
 export interface UserProfile {
   uid: string
-  firstName?: string
+  firstName: string
   lastName?: string
   age?: number
-  email?: string
+  email: string
   createdAt?: FirebaseFirestore.Timestamp
 }
 
@@ -42,4 +42,18 @@ export async function deleteUserProfile(uid: string) {
   return true
 }
 
-export default { createUserProfile, getUserProfile, updateUserProfile, deleteUserProfile }
+export async function getUserByEmail(email: any) {
+  const db = getDb()
+  const snapshot = await db.collection(collectionName)
+    .where('email', '==', email)
+    .limit(1)
+    .get()
+  
+  if (snapshot.empty) {
+    return null
+  }
+  
+  return snapshot.docs[0].data() as UserProfile
+}
+
+export default { createUserProfile, getUserProfile, updateUserProfile, deleteUserProfile, getUserByEmail }
