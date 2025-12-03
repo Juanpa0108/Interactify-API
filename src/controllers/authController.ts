@@ -464,8 +464,7 @@ export async function deleteAccount(req: Request, res: Response, next: NextFunct
  */
 export const forgotPassword = async (req: Request, res: Response): Promise<void | Response> => {
   const { email } = req.body
-  const user = await User.getUserByEmail({ email })
-
+  const user = await User.getUserByEmail(email )
   if (!user) {
     const error = new Error('There is no user with that email')
     return res.status(404).json({ error: error.message })
