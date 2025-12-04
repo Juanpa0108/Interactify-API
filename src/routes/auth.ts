@@ -8,6 +8,7 @@ import {
   verifyToken,
   getProfile,
   updateProfile,
+  changePassword,
   deleteAccount,
 } from '../controllers/authController';
 import authMiddleware from '../middleware/authMiddleware';
@@ -25,6 +26,7 @@ router.post('/verify', verifyToken);
 // Rutas protegidas (requieren autenticación)
 router.get('/profile', authMiddleware, getProfile);
 router.post('/update', authMiddleware, updateProfile);
+router.post('/change-password', authMiddleware, changePassword);
 router.delete('/delete', authMiddleware, deleteAccount);
 
 export default router;
