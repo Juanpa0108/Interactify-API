@@ -30,7 +30,15 @@ import protectedRoutes from './routes/protected';
 const app = express();
 
 app.use(morgan('dev'));
-app.use(cors());
+app.use(cors({
+  origin: '*', // Permite todos los orígenes
+  credentials: false, // Debe ser false cuando origin es '*'
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Manejo explícito de preflight
+app.options('*', cors());
 app.use(express.json());
 
 // Allow popups (Firebase auth signInWithPopup) to communicate with the opener.
