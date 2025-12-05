@@ -31,6 +31,8 @@
 import { Request, Response, NextFunction } from 'express';
 import firebaseAdmin from '../services/firebaseAdmin';
 import userModel from '../models/User';
+import User from '../models/User';
+import { AuthEmail } from '../emails/AuthEmail';
 
 // Validación de email
 const validateEmail = (email: string): boolean => {
@@ -495,5 +497,68 @@ export async function deleteAccount(req: Request, res: Response, next: NextFunct
     res.json({ message: 'Cuenta eliminada exitosamente' });
   } catch (err) {
     next(err);
+  }
+}
+
+/**
+ * Initiates the password recovery process.
+ *
+ * @async
+ * @function forgotPassword
+ * @param {Request} req - HTTP request object
+ * @param {Response} res - HTTP response object
+ * @returns {Promise<void>}
+ */
+export const forgotPassword = async (req: Request, res: Response): Promise<void | Response> => {
+  const { email } = req.body
+  const user = await User.getUserByEmail(email )
+  if (!user) {
+    const error = new Error('There is no user with that email')
+    return res.status(404).json({ error: error.message })
+  }
+
+  await AuthEmail.sendConfirmationEmail({ email: user.email, id: user.uid.toString() })
+
+  res.json({ msg: 'We have sent an email with instructions' })
+}
+
+/**
+ * Resets a user's password using an ID received in the query parameters.
+ *
+ * @async
+ * @function resetPassword
+ * @param {Object} req - HTTP request object
+ * @param {Object} res - HTTP response object
+ * @returns {Promise<void>}
+ *
+ * @example
+ * // POST /reset-password?id=123
+ * // Body: { "password": "12345678", "confirmPassword": "12345678" }
+ * // Response: { "msg": "Password updated successfully" }
+ */
+export const resetPassword = async (req: Request, res: Response): Promise<void | Response> => {
+  const { password, confirmPassword } = req.body
+  const { id } = req.query
+
+  if (password !== confirmPassword) {
+    return res.status(400).json({ error: 'Passwords do not match' })
+  }
+
+  const user = await User.getUserProfile(id as string)
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' })
+  }
+
+  // Actualizar la contraseña en Firebase Authentication
+  try {
+    const admin = firebaseAdmin.init()
+    await admin.auth().updateUser(id as string, {
+      password: password
+    })
+    
+    res.json({ msg: 'Password updated successfully' })
+  } catch (error) {
+    console.error('Error updating password:', error)
+    res.status(500).json({ error: 'Failed to update password' })
   }
 }
