@@ -385,7 +385,7 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
       return res.status(401).json({ error: 'Usuario no autenticado' });
     }
 
-    const { firstName, lastName } = req.body;
+    const { firstName, lastName, age } = req.body;
 
     if (!firstName || !lastName) {
       return res.status(400).json({ error: 'firstName y lastName son requeridos' });
@@ -400,7 +400,11 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
 
     // Actualizar en Firestore si está configurado
     try {
-      await userModel.updateUserProfile(user.uid, { firstName, lastName })
+      const updateData: any = { firstName, lastName };
+      if (age !== undefined) {
+        updateData.age = age;
+      }
+      await userModel.updateUserProfile(user.uid, updateData)
     } catch (e) {
       console.warn('[updateProfile] could not update Firestore profile', (e as any)?.message || e)
     }
@@ -413,6 +417,7 @@ export async function updateProfile(req: Request, res: Response, next: NextFunct
       user: {
         firstName,
         lastName,
+        age,
         email: userRecord.email,
         displayName: userRecord.displayName,
         uid: userRecord.uid,
